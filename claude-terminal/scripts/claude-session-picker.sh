@@ -80,6 +80,7 @@ launch_bash_shell() {
     echo "🐚 Dropping to bash shell..."
     echo "Tip: Run 'claude' manually when ready"
     sleep 1
+    cd /config 2>/dev/null || true
     exec bash
 }
 

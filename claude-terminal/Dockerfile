@@ -14,6 +14,12 @@ RUN apk add --no-cache \
     && pipx inject homeassistant-cli click==8.0.4 \
     && npm cache clean --force
 
+# Create non-root user for Claude Code CLI (required: cannot run with root + --dangerously-skip-permissions)
+RUN addgroup -g 1000 claude \
+    && adduser -u 1000 -G claude -h /home/claude -s /bin/bash -D claude \
+    && mkdir -p /home/claude/.config \
+    && chown -R claude:claude /home/claude
+
 # Ensure pipx binaries are in PATH
 ENV PATH="/root/.local/bin:$PATH"
 
