@@ -4,14 +4,20 @@
 init_environment() {
     # Ensure claude-config directory exists for persistent storage
     mkdir -p /config/claude-config
+
+    # Set ownership to claude user for non-root execution
+    chown -R claude:claude /config/claude-config
     chmod 755 /config/claude-config
 
-    # Set up Claude Code CLI config directory
-    mkdir -p /root/.config
-    
+    # Set up Claude Code CLI config directory for claude user
+    mkdir -p /home/claude/.config
+
     # Remove existing link if it exists and create fresh symlink
-    rm -rf /root/.config/anthropic
-    ln -sf /config/claude-config /root/.config/anthropic
+    rm -rf /home/claude/.config/anthropic
+    ln -sf /config/claude-config /home/claude/.config/anthropic
+
+    # Ensure claude user owns their home directory
+    chown -R claude:claude /home/claude
 
     # Ensure proper permissions on any existing credential files
     if [ -f "/config/claude-config/session_key" ]; then
@@ -23,9 +29,9 @@ init_environment() {
 
     # Set environment variables for Claude Code CLI
     export ANTHROPIC_CONFIG_DIR="/config/claude-config"
-    export HOME="/root"
-    
+
     bashio::log.info "Credential directory initialized: /config/claude-config"
+    bashio::log.info "Claude user configured for non-root execution"
 }
 
 # Install required tools
@@ -56,21 +62,22 @@ setup_session_picker() {
 # Determine Claude launch command based on configuration
 get_claude_launch_command() {
     local auto_launch_claude
-    
+
     # Get configuration value, default to true for backward compatibility
     auto_launch_claude=$(bashio::config 'auto_launch_claude' 'true')
-    
+
+    # Use su to run Claude as non-root user (required: Claude CLI refuses --dangerously-skip-permissions with root)
     if [ "$auto_launch_claude" = "true" ]; then
-        # Original behavior: auto-launch Claude directly
-        echo "clear && echo 'Welcome to Claude Terminal!' && echo '' && echo 'Starting Claude...' && sleep 1 && node \$(which claude) --dangerously-skip-permissions"
+        # Auto-launch Claude as claude user
+        echo "clear && echo 'Welcome to Claude Terminal!' && echo '' && echo 'Starting Claude...' && sleep 1 && su - claude -c 'cd /config && node \$(which claude)'"
     else
-        # New behavior: show interactive session picker
+        # Show interactive session picker (runs as claude user)
         if [ -f /usr/local/bin/claude-session-picker ]; then
-            echo "clear && /usr/local/bin/claude-session-picker"
+            echo "clear && su - claude -c 'cd /config && /usr/local/bin/claude-session-picker'"
         else
             # Fallback if session picker is missing
             bashio::log.warning "Session picker not found, falling back to auto-launch"
-            echo "clear && echo 'Welcome to Claude Terminal!' && echo '' && echo 'Starting Claude...' && sleep 1 && node \$(which claude) --dangerously-skip-permissions"
+            echo "clear && echo 'Welcome to Claude Terminal!' && echo '' && echo 'Starting Claude...' && sleep 1 && su - claude -c 'cd /config && node \$(which claude)'"
         fi
     fi
 }
@@ -84,7 +91,7 @@ start_web_terminal() {
     # Log environment information for debugging
     bashio::log.info "Environment variables:"
     bashio::log.info "ANTHROPIC_CONFIG_DIR=${ANTHROPIC_CONFIG_DIR}"
-    bashio::log.info "HOME=${HOME}"
+    bashio::log.info "Claude user HOME=/home/claude"
 
     # Get the appropriate launch command based on configuration
     local launch_command
